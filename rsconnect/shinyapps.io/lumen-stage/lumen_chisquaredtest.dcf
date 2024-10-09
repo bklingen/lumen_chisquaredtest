@@ -1,0 +1,12 @@
+name: lumen_chisquaredtest
+title: lumen_chisquaredtest
+username: lumen-stage
+account: lumen-stage
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 12962811
+bundleId: 9199939
+url: https://lumen-stage.shinyapps.io/lumen_chisquaredtest/
+version: 1
+asMultiple: FALSE
+asStatic: FALSE

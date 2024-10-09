@@ -826,19 +826,23 @@ output$obscounts <- renderTable({
   myGoF$test <- gof 
   ecounts <- gof$expected
   resid <- counts-ecounts
-  stdresid <- gof$stdres
+  stdresid <- resid/sqrt(ecounts)
+  adjresid <- gof$stdres
   probs0 <- probs/sum(probs)
-  df1 <- rbind(counts, probs0, ecounts, resid, stdresid)
+  df1 <- rbind(counts, probs0, ecounts, resid, stdresid, adjresid)
   df1 <- df2 <- addmargins(df1,2)
   df2[1,] <- format(df1[1,], big.mark = ",")
   df2[2,] <- format(df1[2,], digits=4, nsmall=2)
   df2[3,] <- format(df1[3,], digits=2, nsmall=1, big.mark = ",")
   df2[4,] <- format(round(df1[4,],2), nsmall=2, big.interval = ",")
   df2[5,] <- round(df1[5,],2)
+  df2[6,] <- round(df1[6,],2)
   df2[,dim(df2)[2]] <- paste0("<b>",df2[,dim(df2)[2]],"</b>")
   colnames(df2) <- c(colnames(df), "Total")
-  rownames(df2) <- c("Observed Counts", "Hypothesized Proportions", "Expected Counts", "Residuals", "Standardized Residuals")
-  if(!input$stdres2) df2 <- df2[-5,] 
+  rownames(df2) <- c("Observed Counts", "Hypothesized Proportions", "Expected Counts", "Residuals: Obs - Exp", "Standardized Residuals: (Obs - Exp) / √Exp", "Adjusted Standardized Residuals")
+  if(!input$stdres1 & !input$adjres1) df2 <- df2[-c(5,6),]
+  if(input$stdres1 & !input$adjres1) df2 <- df2[-6,]
+  if(!input$stdres1 & input$adjres1) df2 <- df2[-5,]
   return(df2)
 },
 rownames=TRUE,

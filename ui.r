@@ -195,7 +195,7 @@ shinyUI(
         ),
         fluidRow(
           column(6, conditionalPanel("input.res.indexOf('1') > -1",   
-                                     h5(HTML(" <u> <b> Raw Residuals: (Obs - Exp) </b> </u>")),
+                                     h5(HTML(" <u> <b> Raw Residuals: Obs - Exp </b> </u>")),
                                      tableOutput("resid"))
           ),
           column(6, conditionalPanel("input.res.indexOf('2') > -1",   
@@ -285,7 +285,8 @@ shinyUI(
           br()
         ),
         h5(tags$b("Options:")),
-        awesomeCheckbox("stdres2","Show Standardized (Pearson) Residuals"),
+        awesomeCheckbox("stdres1","Show Standardized (Pearson) Residuals"),
+        awesomeCheckbox("adjres1","Show Adjusted Standardized Residuals"),
         tags$hr(class = "custom-hr"),
         h5(tags$b("Available on Mobile:")),
         div(class="row",
@@ -317,7 +318,7 @@ shinyUI(
       mainPanel(
         tableOutput("obscounts"),
         tableOutput("X2test2"),
-        plotOutput("mytestplot2"),
+        plotOutput("mytestplot2", height=280),
         width=7
       ) #end mainpanel
     ) #end sidebarLayout second tab
