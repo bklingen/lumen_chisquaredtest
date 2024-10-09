@@ -255,11 +255,11 @@ shinyUI(
           )
         ),
         conditionalPanel("input.how1=='cont'", 
-          helpText("Enter category labels, counts and hypothesized proportions by clicking in the corresponding cells:")
+          helpText("Enter category labels, counts and hypothesized proportions by clicking in the corresponding cells. Then, press the Submit button:")
         ),
         conditionalPanel(condition="input.how1=='ind' || input.how1=='upload'",
           conditionalPanel(condition="input.how1=='ind'",
-            textAreaInput("indobs", "Categorical Observations:", placeholder="Green, Green, Yellow, Green, Yellow, Yellow, Green, Yellow, Yellow")
+            textAreaInput("indobs", "Enter Categorical Observations:", placeholder="Green, Green, Yellow, Green, Yellow, Yellow, Green, Yellow, Yellow")
           ),
           conditionalPanel(condition = "input.how1 == 'upload'", 
                            # helpText("File needs to be in long format, containing one column with the variable of interest, and another identifying group membership."),
@@ -268,7 +268,7 @@ shinyUI(
                            br(),
                            selectInput("var", "Select Variable to Analyze:", choices=NULL, selectize=FALSE)
           ),
-          helpText("The table below shows the observed counts. Click on the cells in the last row to enter the hypothesized proportions, then press submit.")
+          helpText("The table below shows the observed counts. Click on the cells in the last row to enter the hypothesized proportions, then press the Submit button.")
         ),
         uiOutput("inmatrix1"),
         conditionalPanel("input.how1=='cont' || input.how1=='ind' || input.how1=='upload'", 
@@ -282,9 +282,8 @@ shinyUI(
                  Enter the population proportions for the categories under the null hypothesis by clicking in the cells of the third row.
                  (Make sure the proportions add up to 1; if they don't, they are scaled so that they will add up to 1.)")
           ),
-          br()
         ),
-        h5(tags$b("Options:")),
+        h5(tags$u(tags$b("Options:"))),
         awesomeCheckbox("stdres1","Show Standardized (Pearson) Residuals"),
         awesomeCheckbox("adjres1","Show Adjusted Standardized Residuals"),
         tags$hr(class = "custom-hr"),
