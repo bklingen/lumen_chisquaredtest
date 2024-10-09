@@ -130,7 +130,7 @@ shinyUI(
           label = "Select Type of Residual to Display:",        # Label above the dropdown
           choices = list("Raw Residual" = 1,    # Choices for the dropdown
                          "Standardized (Pearson) Residual" = 2, 
-                         "Adjusted Standardized (Pearson) Residual" = 3),
+                         "Adjusted Standardized Residual" = 3),
           multiple = TRUE                  # Allow multiple selections
         ),
         # h5(tags$u("Residuals:")),
