@@ -757,7 +757,7 @@ output$inmatrix1 <- renderUI({
     'cont' = {
       c <- input$ncat
       clabs <- paste("Cat",1:c)
-      row1 <- rep(0,c)
+      row1 <- rep("",c)
       row2 <- rep(signif(1/c,2),c)
       DF <- matrix(c(row1,row2), byrow=TRUE, ncol=c)
       colnames(DF) <- clabs
@@ -821,7 +821,7 @@ output$obscounts <- renderTable({
   if(input$how1 != 'textb' & input$submit1<1) return(NULL)
   df <- req(input$countsin)
   counts <- as.numeric(df[1,])
-  if(sum(counts)<1) return(NULL)
+  if(any(is.na(counts)) || any(is.null(counts)) || sum(counts)<1) return(NULL)
   probs <- as.numeric(df[2,])
   gof <- chisq.test(counts, p=probs, rescale.p = TRUE, correct=FALSE)
   myGoF$test <- gof 
