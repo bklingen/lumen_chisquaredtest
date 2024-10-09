@@ -25,28 +25,118 @@ X2 <- function(a,b) {  #computes X2 statistic for long data
   sum((tab-exp)^2/exp)
 }
 
+PvalRound <- function(p) {
+  p0 = unlist(p)
+  if(is.na(p0)) return(NA)
+  if(!is.finite(p0)) return(NA)
+  if(p0 > 0.9999) return("1.000")
+  else if(p0 <= 0.0001) return("< 0.0001")
+  else return(format(round(p0 + 10^(-12), 4), nsmall=4))
+}
+
 shinyServer(function(input, output, session) {
 
 rowlabels <- reactive({
   if(input$varname1=="") varn1 <- "Var1" else varn1 <- input$varname1
-  if(input$cat1=="") labels1 <- c("Cat1", "Cat2", "Cat3") else labels1 <- str_trim(unlist(strsplit(input$cat1,",")))
+  if(input$cat1=="") labels1 <- c("Row1", "Row2", "Row3") else labels1 <- str_trim(unlist(strsplit(input$cat1,",")))
   if(length(labels1)<2) labels1 <- c(labels1, " ")
   return(list(name=varn1,lab=labels1))
 })
   
 collabels <- reactive({
   if(input$varname2=="") varn2 <- "Var2" else varn2 <- input$varname2
-  if(input$cat2=="") labels2 <- c("Cat1", "Cat2", "Cat3") else labels2 <- str_trim(unlist(strsplit(input$cat2,",")))
+  if(input$cat2=="") labels2 <- c("Col1", "Col2", "Col3") else labels2 <- str_trim(unlist(strsplit(input$cat2,",")))
   if(length(labels2)<2) labels2 <- c(labels2, " ")
   return(list(name=varn2,lab=labels2))
 })
 
+observeEvent(list(input$how), {
+  if(input$how == 'cont') {
+    updateTextInput(session, 'varname1', value="", placeholder="Var1")
+    updateTextInput(session, 'varname2', value="", placeholder="Var2")
+    updateTextInput(session, 'cat1', value="", placeholder="Row1, Row2, Row3")
+    updateTextInput(session, 'cat2', value="", placeholder="Col1, Col2, Col3")
+  }
+}, ignoreInit = TRUE)
+
 mytable <- reactiveValues(DF=NULL, condDF=NULL, chart=NULL)
+
+uploadedData = reactiveVal(NULL)
+
+observeEvent(list(input$file), {
+  myfile <- input$file
+  if(is.null(myfile)) {
+    uploadedData(NULL)
+  } else {
+    df <- read_csv(myfile$datapath)
+    #numeric_columns_index <- sapply(df, function(x) is.numeric(x))
+    coln <- colnames(df)
+    #mychoices <- as.list(c("", coln[numeric_columns_index]))
+    #names(mychoices) <- c("Choose One", coln[numeric_columns_index])
+    mychoicesAll <- as.list(c("", coln))
+    names(mychoicesAll) <- c("Choose One", coln)
+    updateSelectInput(session, "var1", choices=mychoicesAll, selected=mychoicesAll[1])
+    updateSelectInput(session, "var2", choices=mychoicesAll, selected=mychoicesAll[1])
+    uploadedData(df)
+  }
+},ignoreInit = TRUE)
+
+observeEvent(list(input$var1, input$var2), {
+  if(input$how != 'upload') return(NULL)
+  df <- req(uploadedData())
+  if(nrow(df > 0) > 0) {
+    var1 <- req(input$var1)
+    var2 <- req(input$var2)
+    if(var1 == var2) {
+      showModal(modalDialog(
+        title = "Attention!",
+        "You selected the same variable twice. Please choose two different variables from your dataset.",
+        easyClose = FALSE,  # Allows closing by clicking outside the popup
+        footer = modalButton("Close")  # Add a close button
+      ))
+      updateSelectInput(session,"var2", selected = '')
+      updateSelectInput(session,"var1", selected = '')
+      return(NULL)
+    }
+    df <- df %>% dplyr::select(all_of(c(var1, var2))) %>% na.omit() %>% mutate(across(everything(), as.factor))
+    #colnames(df) = c("var1", "var2")
+    updateTextInput(session, 'varname1', value=var1)
+    updateTextInput(session, 'varname2', value=var2)
+    updateTextInput(session, 'cat1', value=paste(levels(df$var1), collapse=", "))
+    updateTextInput(session, 'cat2', value=paste(levels(df$var2), collapse=", "))
+    mytable$DF <- table(df)
+  } else {
+    updateTextInput(session, 'varname1', value="", placeholder="Var1")
+    updateTextInput(session, 'varname2', value="", placeholder="Var2")
+    updateTextInput(session, 'cat1', value="", placeholder="Row1, Row2, Row3")
+    updateTextInput(session, 'cat2', value="", placeholder="Col1, Col2, Col3")
+  }
+}, ignoreInit = TRUE)
+
+output$hotUpload <- renderRHandsontable({
+  if(input$how != "upload") return(NULL)
+  DF <- uploadedData()
+  if (is.null(DF)) {
+    return(NULL)
+  }
+  mytab <-  rhandsontable(DF, rowHeaders=NULL, height=160, readOnly = TRUE) %>%
+    hot_context_menu(allowRowEdit = FALSE, allowColEdit = FALSE) %>%
+    # hot_cols(type='numeric', manualColumnResize=TRUE
+    # , renderer = 
+    #       "function(instance, td, row, col, prop, value, cellProperties) {
+    #       Handsontable.renderers.TextRenderer.apply(this, arguments);
+    #       td.style.color = 'black';
+    #       }"
+    # ) %>%
+    hot_table(stretchH="all", colHeaders = TRUE, columnSorting = TRUE) 
+  return(mytab)
+})
+
 
 output$hot2 <- renderRHandsontable({
   if(input$how != "cont") return(NULL) 
-  rlabs <- rowlabels()$lab
-  clabs <- collabels()$lab
+  rlabs <- req(rowlabels()$lab)
+  clabs <- req(collabels()$lab)
   r <- length(rlabs)
   c <- length(clabs)
   if (is.null(input$hot2))  DF <- matrix(NA_integer_, r, c)
@@ -160,9 +250,9 @@ datatextb <- eventReactive(list(input$how, input$dataset), {
     },
     "device" = {
       updateTextInput(session, "varname1", value="Device Used to Go Online")
-      updateTextInput(session, "cat1", value="Mostly Cell, Mostly Other, Equally/Depends, Non-Smartphone")
+      updateTextInput(session, "cat1", value="Mostly Cell, Mostly Other, Equally or Depends, Non - Smartphone")
       updateTextInput(session, "varname2", value="Age Bracket")
-      updateTextInput(session, "cat2", value="18-29, 30-49, 50-64, 65+")
+      updateTextInput(session, "cat2", value="18 - 29, 30 - 49, 50 - 64, 65+")
       updateTextInput(session, "title2", value="")
       updateTextInput(session, "subtitle2", value="")
       updateTextInput(session, "caption2", value="")
@@ -171,8 +261,8 @@ datatextb <- eventReactive(list(input$how, input$dataset), {
                     53, 124, 63, 34,
                     13, 38, 78, 136),
                   byrow=TRUE, ncol=4)
-      rownames(m) <- c("Mostly Cell", "Mostly Other", "Equally/Depends", "Non-Smartphone")
-      colnames(m) <- c("18-29", "30-49", "50-64", "65+")
+      rownames(m) <- c("Mostly Cell", "Mostly Other", "Equally or Depends", "Non - Smartphone")
+      colnames(m) <- c("18 - 29", "30 - 49", "50 - 64", "65+")
       names(attr(m,"dimnames")) <- c("Device Used to Go Online", "Age Bracket")
     },
     "incomeedu" = {
@@ -230,20 +320,21 @@ output$hot3 <- renderRHandsontable({
 outputOptions(output, "hot3", priority = 12)
 
 output$freqtab <- renderTable({
-  if(input$how!="ind") {
+  if(input$how == "textb" || input$how == "cont") {
     DF <- switch(input$how, 
                  "cont" = hot_to_r(req(input$hot2)), 
                  "textb" = hot_to_r(req(input$hot2textb))
     )
     if (any(is.na(DF)) | sum(DF)<1) {
       DF <- matrix(NA_integer_, length(rowlabels()$lab), length(collabels()$lab))
-      rownames(DF) <- rowlabels()$lab
-      colnames(DF) <- collabels()$lab
+      rownames(DF) <- req(rowlabels()$lab)
+      colnames(DF) <- req(collabels()$lab)
     }
-    rownames(DF) <- rowlabels()$lab
-    colnames(DF) <- collabels()$lab
+    rownames(DF) <- req(rowlabels()$lab)
+    colnames(DF) <- req(collabels()$lab)
     names(attr(DF,"dimnames")) <- c(rowlabels()$name, collabels()$name)
-  } else {
+    mytable$DF <- DF
+  } else if (input$how == "ind") {
     if(input$submit<1) return(NULL)
     if (!is.null(input$hot3)) {
       DF <- table(hot_to_r(input$hot3),exclude=c("", NA, NaN))
@@ -258,10 +349,13 @@ output$freqtab <- renderTable({
     if(input$varname1_ind=="") vn1 <- "Income" else vn1 <- input$varname1_ind 
     if(input$varname2_ind=="") vn2 <- "Happiness" else vn2 <- input$varname2_ind 
     names(attr(DF,"dimnames")) <- c(vn1,vn2)
+    mytable$DF <- DF
+  } else if(input$how == 'upload') {
+    DF <- mytable$DF 
   }
   #u <- colnames(DF)
   #colnames(DF) <- str_pad(u, width=length(u)+3)
-  mytable$DF <- DF
+  
   d <- dim(DF)
   DF <- addmargins(DF)
   rownames(DF)[d[1]+1] <- "Overall"
@@ -313,6 +407,9 @@ spacing="xs"
 reactall <- reactive({
   input$how
   input$dataset
+  input$file
+  input$var1
+  input$var2
   input$hot2
   input$hot2textb
   input$hot3
@@ -338,8 +435,8 @@ output$barchart <- renderPlotly({
   if(sum(df$Freq)<1) return(NULL)
   df$Freq1 <- 100*as.data.frame(df1)$Freq #row percentages
   colnames(df) <- c("V1","V2","Count","Freq1")
-  levels(df$V1) <- str_replace(str_wrap(str_trim(levels(df$V1), side="left"), 12), pattern="\n", replacement="<br>")
-  levels(df$V2) <- str_replace(str_wrap(str_trim(levels(df$V2), side="left"), 8), pattern="\n", replacement="<br>")
+  levels(df$V1) <- str_replace(str_wrap(str_trim(levels(df$V1), side="left"), 10), pattern="\n", replacement="<br>")
+  levels(df$V2) <- str_replace(str_wrap(str_trim(levels(df$V2), side="left"), 12), pattern="\n", replacement="<br>")
   barplot <- plot_ly(data=df, x=~V1, y=as.formula(paste0("~",ifelse(!input$freq,"Freq1","Count"))),
                            color=~V2, colors=mycol[1:nlevels(df$V2)],
                            marker = list(line = list(color = '#000000', width = 1)),
@@ -386,39 +483,63 @@ output$barchart <- renderPlotly({
   return(barplot)
 })
 
-X2stat <- reactiveValues(X2=NULL, df=NULL, P=NULL, exp=NULL, res=NULL, stdres=NULL, plot=NULL)
+X2stat <- reactiveValues(X2=NULL, df=NULL, P=NULL, exp=NULL, res=NULL, stdres=NULL, adjres=NULL,plot=NULL)
 
-observeEvent(list(input$hot2, input$hot2texb, input$hot3), {
-  X2stat$X2=NULL; X2stat$df=NULL; X2stat$P=NULL; X2stat$exp=NULL; X2stat$res=NULL; X2stat$stdres=NULL; plot=NULL
+observeEvent(list(input$how, input$dataset, input$file, input$hot2, input$hot2texb, input$hot3), {
+  X2stat$X2=NULL; X2stat$df=NULL; X2stat$P=NULL; X2stat$exp=NULL; X2stat$res=NULL; X2stat$stdres=NULL; X2stat$adjres=NULL;plot=NULL
 })
 
-output$X2test <- renderTable({
-  if(input$how == 'ind' & input$submit<1) return(NULL)
-  t <- req(mytable$DF)
+observeEvent(list(mytable, reactall()), {
+  t <- mytable$DF
   if(any(is.na(t))) return(NULL)
-  if(input$how!='ind') {
-    rlabs <- rowlabels()$lab
-    clabs <- collabels()$lab
-    r <- length(rlabs)
-    c <- length(clabs)
-    if(!all(dim(t)==c(r,c))) return(NULL)
-  }
+  # if(input$how != 'ind') {
+  #   rlabs <- rowlabels()$lab
+  #   clabs <- collabels()$lab
+  #   r <- length(rlabs)
+  #   c <- length(clabs)
+  #   if(!all(dim(t)==c(r,c))) return(NULL)
+  # }
   X2 <- chisq.test(t, correct=FALSE)
   X2stat$X2 <- X2$statistic
   X2stat$df <- X2$parameter
   X2stat$P <- X2$p.value
   X2stat$exp <- X2$expected
-  X2stat$res <- t - X2$expected #these are the Pearson residuals (obs-exp)/sqrt(exp)
-  X2stat$stdres <- X2$stdres
-  P <- round(X2$p.value,digits=4)
-  df <- data.frame("Independence (or homogeneous distributions)", "Association (or non-homogeneous distributions)", format(round(X2$statistic,2),digits=2, nsmall=2, big.mark=","), format(X2$parameter,0), ifelse(P>0.0001,P,"<0.0001"))
+  X2stat$res <- t - X2$expected #these are the raw residuals (obs-exp)
+  X2stat$stdres <- X2$residuals #these are the Pearson residuals (obs-exp)/sqrt(exp)
+  X2stat$adjres <- X2$stdres #lets call them adjusted residuals
+})
+
+output$X2test <- renderTable({
+  if(input$how == 'ind' & input$submit<1) return(NULL)
+  # t <- req(mytable$DF)
+  # if(any(is.na(t))) return(NULL)
+  # if(input$how!='ind') {
+  #   rlabs <- rowlabels()$lab
+  #   clabs <- collabels()$lab
+  #   r <- length(rlabs)
+  #   c <- length(clabs)
+  #   if(!all(dim(t)==c(r,c))) return(NULL)
+  # }
+  # X2 <- chisq.test(t, correct=FALSE)
+  # X2stat$X2 <- X2$statistic
+  # X2stat$df <- X2$parameter
+  # X2stat$P <- X2$p.value
+  # X2stat$exp <- X2$expected
+  # X2stat$res <- t - X2$expected #these are the raw residuals (obs-exp)
+  # X2stat$stdres <- X2$residuals #these are the Pearson residuals (obs-exp)/sqrt(exp)
+  # X2stat$adjres <- X2$stdres #lets call them adjusted residuals
+  # P <- X2$p.value
+  df <- data.frame("Independence<br>(or Homogeneous Distributions)", "Association<br>(or Non-Homogeneous Distributions)", 
+                   format(round(req(X2stat$X2), 2),digits=2, nsmall=2, big.mark=","), 
+                   format(req(X2stat$df),0), 
+                   PvalRound(req(X2stat$P))
+                   )
   colnames(df) <- c("Null Hypothesis", "Alternative Hypothesis", "Test Statistic X<sup>2</sup>", "df", "P-value")
   return(df)
 },
 rownames=FALSE,
 colnames=TRUE,
 sanitize.text.function = function(x) x,
-digits=4,
 align = "c",
 striped=TRUE,
 bordered=TRUE
@@ -429,13 +550,13 @@ output$mytestplot <- 	renderPlot({
   t <- req(X2stat$X2)
   dg <- req(X2stat$df)
   P <- req(X2stat$P)
-  max <- max(c(qchisq(.999,dg), t+3))
+  max <- max(qchisq(.999,dg), 1.1*t)
   x <- seq(0, max, length.out=300)
   y <- dchisq(x, df=dg)
   df.t <- data.frame(x=x,y=y)
   basic.plot <- ggplot(data=df.t, aes(x=x, y=y)) +
     geom_area(fill="#6A51A3", alpha=0.25) + 
-    geom_line(size=1,  alpha=1, color="black") +   #color="#669900",
+    geom_line(linewidth=1,  alpha=1, color="black") +   #color="#669900",
     theme_classic()  +
     theme(text=element_text(size=16),
           plot.title = element_text(size=16, hjust=0.5, margin = margin(b=10), face="bold"),
@@ -453,13 +574,13 @@ output$mytestplot <- 	renderPlot({
     b <- P
     basic.plot <- basic.plot +
       geom_area(data = subset(df.t, x>=t), aes(x, y), fill = "#6A51A3", alpha = 0.6) +
-      geom_vline(xintercept=t, size=1.2, linetype=2) +
+      geom_vline(xintercept=t, linewidth=1.2, linetype=2) +
       geom_point(x=t, y=0, size=6, pch="X", color="#FF6600") +
       annotate("label", x = t, y = Inf, label = format(round(1-b,4), digits=4, nsmall=1), size=5, vjust=0.4, hjust=1.1, color = "#6A51A380", fontface="bold") +
       annotate("label", x = t, y = Inf, label = format(round(b,4), digits=4, nsmall=1), size=5, vjust=0.4, hjust=-0.2, color = "#6A51A3", fontface="bold") +
       annotate("text", label=paste0("X^2 == ", format(round(t,2),digits=2,nsmall=2)), parse=TRUE, x=t, y=0, vjust=2.1, size=4.8, color="#FF6600", alpha=1)
     subtitle = substitute(H[0]:~ "Independence, "  * X^2 ~ "" == ~b * ", " * df ~ "" == ~a * ", P-value" ~ "" == ~ c, 
-                          list(a=dg, b=format(round(t,2),digits=2,nsmall=2), c=format(round(P,4), digits=4, nsmall=4)))
+                          list(a=dg, b=format(round(t,2),digits=2,nsmall=2), c=PvalRound(P)))
 
   main <- paste0("Chi-Squared Distribution with df = ", dg)
   plot <- basic.plot + ggtitle(label=main, subtitle=subtitle) + coord_cartesian(clip="off")
@@ -482,8 +603,8 @@ output$expVal <- renderTable({
   #DF <- apply(DF,c(1,2), function(x) paste0(format(x,digits=1, nsmall=1),"%"))
   DF <- apply(DF,c(1,2), function(x) format(x, digits=2, nsmall=1, big.mark=","))
   rownames(DF) <- paste0("<b>", rownames(DF), "</b>")
-  DF[d[1]+1,] <- paste0("<b>", format(Overall, digits=0, nsmall=0, big.mark=","), "</b>")
-  DF[,d[2]+1] <- paste0("<b>", format(Total, digits=0, nsmall=0, big.mark=","), "</b>")
+  DF[d[1]+1,] <- paste0("<b>", format(Overall, big.mark=","), "</b>")
+  DF[,d[2]+1] <- paste0("<b>", format(Total, big.mark=","), "</b>")
   return(DF)
 },
 rownames=TRUE,
@@ -527,10 +648,74 @@ bordered=TRUE,
 align="r"
 )
 
+output$adjresid <- renderTable({
+  reactall()
+  if(input$how == 'ind' & input$submit<1) return(NULL)
+  DF <- req(X2stat$stdres)
+  d <- dim(DF)
+  DF <- apply(DF,c(1,2), function(x) format(x, digits=2, nsmall=1, big.mark=","))
+  rownames(DF) <- paste0("<b>", rownames(DF), "</b>")
+  return(DF)
+},
+rownames=TRUE,
+colnames=TRUE,
+sanitize.text.function = function(x) x,
+digits=1,
+bordered=TRUE,
+align="r"
+)
+
 
 ###############################################
 ######## Second Tab: Goodness of Fit ##########
 ###############################################
+
+uploadedData1 = reactiveVal(NULL)
+
+observeEvent(list(input$file1), {
+  myfile <- input$file1
+  if(is.null(myfile)) {
+    uploadedData1(NULL)
+  } else {
+    df <- read_csv(myfile$datapath)
+    #numeric_columns_index <- sapply(df, function(x) is.numeric(x))
+    coln <- colnames(df)
+    mychoicesAll <- as.list(c("", coln))
+    names(mychoicesAll) <- c("Choose One", coln)
+    updateSelectInput(session, "var", choices=mychoicesAll, selected=mychoicesAll[1])
+    uploadedData1(df)
+  }
+},ignoreInit = TRUE)
+
+# observeEvent(list(input$var), {
+#   if(input$how1 != 'upload') return(NULL)
+#   df <- req(uploadedData1())
+#   if(nrow(df > 0) > 0) {
+#     var <- req(input$var)
+#     df <- df %>% dplyr::select(all_of(var)) %>% na.omit() %>% mutate(across(everything(), as.factor))
+#     mytable$DF <- table(df)
+#   } else {
+#   }
+# }, ignoreInit = TRUE)
+
+output$hotUpload1 <- renderRHandsontable({
+  if(input$how1 != "upload") return(NULL)
+  DF <- uploadedData1()
+  if (is.null(DF)) {
+    return(NULL)
+  }
+  mytab <-  rhandsontable(DF, rowHeaders=NULL, height=160, readOnly = TRUE) %>%
+    hot_context_menu(allowRowEdit = FALSE, allowColEdit = FALSE) %>%
+    # hot_cols(type='numeric', manualColumnResize=TRUE
+    # , renderer = 
+    #       "function(instance, td, row, col, prop, value, cellProperties) {
+    #       Handsontable.renderers.TextRenderer.apply(this, arguments);
+    #       td.style.color = 'black';
+    #       }"
+    # ) %>%
+    hot_table(stretchH="all", colHeaders = TRUE, columnSorting = TRUE) 
+  return(mytab)
+})
 
 output$inmatrix1 <- renderUI({
   switch(input$how1,
@@ -583,7 +768,14 @@ output$inmatrix1 <- renderUI({
     'ind' = {
       indobs <- str_split(req(input$indobs), pattern=" ")
       indobs <- indobs[[1]][indobs[[1]] != ""]
-      indobs <- factor(indobs, levels=unique(indobs))
+      
+      nums1 <- str_remove_all(req(input$indobs), "^\\s*|\\s*$|,+\\s*$") #removes trailing commas and whitespace from entire string
+      nums1 <- str_replace_all(nums1, '\t\n', ',') #in case data was copy and pasted in Unix
+      nums1 <- str_replace_all(nums1, '\n', ',') #in case data was copy and pasted in Windows
+      nums1 <- str_split(nums1, ",") #scan(text=nums1, what="character", sep=",")
+      nums1 <- sapply(nums1, str_trim, simplify = TRUE) #removes trailing commas and whitespace from each element
+      nums1 <- nums1[nums1 != ""] #remove empty string
+      indobs <- factor(nums1, levels=unique(nums1))
       df <- table(indobs)
       c <- dim(df)
       clabs <- names(df)
@@ -595,6 +787,26 @@ output$inmatrix1 <- renderUI({
       if(ncol(DF)<c) DF <- cbind(DF, matrix(NA, nrow=1, ncol=c-ncol(DF)))
       if(ncol(DF)>c) DF <- DF[,1:c]
       matrixInput("countsin", value = DF, rows = list(names=TRUE, editableNames=FALSE), cols=list(names=TRUE, editableNames=TRUE))
+    },
+    'upload' = {
+      df <- req(uploadedData1())
+      if(nrow(df > 0) > 0) {
+        var <- req(input$var)
+        df <- df %>% dplyr::select(all_of(var)) %>% na.omit() %>% mutate(across(everything(), as.factor))
+        df <- table(df)
+        c <- dim(df)
+        clabs <- names(df)
+        row1 <- c(df)
+        row2 <- rep(signif(1/c,2),c)
+        DF <- matrix(c(row1,row2), byrow=TRUE, ncol=c)
+        colnames(DF) <- clabs
+        rownames(DF) <- c("Counts:", "Props:")
+        if(ncol(DF)<c) DF <- cbind(DF, matrix(NA, nrow=1, ncol=c-ncol(DF)))
+        if(ncol(DF)>c) DF <- DF[,1:c]
+        matrixInput("countsin", value = DF, rows = list(names=TRUE, editableNames=FALSE), cols=list(names=TRUE, editableNames=TRUE))
+      } else {
+        matrixInput("countsin", value = matrix(NA, ncol=4, nrow=2), rows = list(names=TRUE, editableNames=FALSE), cols=list(names=TRUE, editableNames=TRUE))
+      }
     }
     
   )
@@ -618,7 +830,7 @@ output$obscounts <- renderTable({
   probs0 <- probs/sum(probs)
   df1 <- rbind(counts, probs0, ecounts, resid, stdresid)
   df1 <- df2 <- addmargins(df1,2)
-  df2[1,] <- format(df1[1,], digits=0, big.mark = ",")
+  df2[1,] <- format(df1[1,], big.mark = ",")
   df2[2,] <- format(df1[2,], digits=4, nsmall=2)
   df2[3,] <- format(df1[3,], digits=2, nsmall=1, big.mark = ",")
   df2[4,] <- format(round(df1[4,],2), nsmall=2, big.interval = ",")
@@ -670,7 +882,7 @@ output$mytestplot2 <- 	renderPlot({
   df.t <- data.frame(x=x,y=y)
   basic.plot <- ggplot(data=df.t, aes(x=x, y=y)) +
     geom_area(fill="#6A51A3", alpha=0.25) + 
-    geom_line(size=1,  alpha=1, color="black") +   #color="#669900",
+    geom_line(linewidth=1,  alpha=1, color="black") +   #color="#669900",
     theme_classic()  +
     theme(text=element_text(size=16),
           plot.title = element_text(size=16, hjust=0.5, margin = margin(b=10), face="bold"),
@@ -688,7 +900,7 @@ output$mytestplot2 <- 	renderPlot({
   b <- P
   basic.plot <- basic.plot +
     geom_area(data = subset(df.t, x>=t), aes(x, y), fill = "#6A51A3", alpha = 0.6) +
-    geom_vline(xintercept=t, size=1.2, linetype=2) +
+    geom_vline(xintercept=t, linewidth=1.2, linetype=2) +
     geom_point(x=t, y=0, size=6, pch="X", color="#FF6600") +
     annotate("label", x = t, y = Inf, label = format(round(1-b,4), digits=4, nsmall=1), size=5, vjust=0.4, hjust=1.1, color = "#6A51A380", fontface="bold") +
     annotate("label", x = t, y = Inf, label = format(round(b,4), digits=4, nsmall=1), size=5, vjust=0.4, hjust=-0.2, color = "#6A51A3", fontface="bold") +
