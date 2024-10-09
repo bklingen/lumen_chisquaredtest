@@ -858,11 +858,11 @@ output$X2test2 <- renderTable({
   if(input$how1 != 'textb' & input$submit1<1) return(NULL)
   X2 <- req(myGoF$test)
   dg <- X2$parameter
-  P <- round(X2$p.value,digits=4)
+  P <- PvalRound(X2$p.value)
   probs0 <- as.numeric(c(input$countsin[2,]))
   probs0 <- signif(probs0/sum(probs0),4)
   df <- data.frame(paste0("p<sub>",1:(dg+1), "</sub> = ", probs0, collapse=", "), format(X2$statistic,digits=2, nsmall=2, big.mark=","), 
-                   format(dg,0), ifelse(P>0.0001,P,"<0.0001"))
+                   format(dg,0), P)
   colnames(df) <- c("Null Hypothesis", "Test Statistic X<sup>2</sup>", "df", "P-value")
   return(df)
 },
@@ -911,7 +911,7 @@ output$mytestplot2 <- 	renderPlot({
     annotate("label", x = t, y = Inf, label = format(round(b,4), digits=4, nsmall=1), size=5, vjust=0.4, hjust=-0.2, color = "#6A51A3", fontface="bold") +
     annotate("text", label=paste0("X^2 == ", format(round(t,2),digits=2,nsmall=2)), parse=TRUE, x=t, y=0, vjust=2.1, size=4.8, color="#FF6600", alpha=1)
   subtitle = substitute(X^2 ~ "" == ~b * ", " * df ~ "" == ~a * ", P-value" ~ "" == ~ c, 
-                        list(a=dg, b=format(round(t,2),digits=2,nsmall=2), c=format(round(P,4), digits=4, nsmall=4)))
+                        list(a=dg, b=format(round(t,2),digits=2,nsmall=2), c=PvalRound(P)))
   
   main <- paste0("Chi-Squared Distribution with df = ", dg)
   plot <- basic.plot + ggtitle(label=main, subtitle=subtitle) + coord_cartesian(clip="off")
