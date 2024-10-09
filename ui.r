@@ -7,8 +7,9 @@ library("rhandsontable")
 library("shinyjs")
 library("colourpicker")
 library("plotly")
-library(shinyMatrix)
+library("shinyMatrix")
 library("prompter")
+library("readr")
 #library("shinythemes")
 
 shinyUI(
